@@ -632,6 +632,59 @@ func TestSelectVal(t *testing.T) {
 	}
 }
 
+//MultipleDbMap
+func TestMultipleDbMap(t *testing.T) {
+
+	dbmap1 := &DbMap{Db: connect(), Dialect: dialect}
+	dbmap2 := &DbMap{Db: connect(), Dialect: dialect}
+	dbmap3 := &DbMap{Db: connect(), Dialect: dialect}
+
+	tables := new([]*TableMap)
+
+	dbmap1.SetTables(tables)
+	dbmap2.SetTables(tables)
+	dbmap3.SetTables(tables)
+
+	dbmap1.Exec("drop table if exists PersistentUser")
+	dbmap1.TraceOn("", log.New(os.Stdout, "gorptest: ", log.Lmicroseconds))
+	table := dbmap1.AddTable(PersistentUser{}).SetKeys(false, "Key")
+	table.ColMap("Key").Rename("mykey")
+
+	//dbmap1 create tables, dbmap2 and dbamp3 can use it,they share tables.
+	err := dbmap1.CreateTables()
+	if err != nil {
+		panic(err)
+	}
+	defer dbmap1.DropTables()
+	defer dbmap2.DropTables()
+	defer dbmap3.DropTables()
+
+	pu := &PersistentUser{43, "33r", false}
+	//use dbmap1
+	err = dbmap1.Insert(pu)
+	if err != nil {
+		panic(err)
+	}
+
+	//use dbmap2
+	// prove we can pass a pointer into Get
+	pu2, err := dbmap2.Get(pu, pu.Key)
+	if err != nil {
+		panic(err)
+	}
+	if !reflect.DeepEqual(pu, pu2) {
+		t.Errorf("%v!=%v", pu, pu2)
+	}
+	//use dbmap3
+	arr, err := dbmap3.Select(pu, "select * from PersistentUser")
+	if err != nil {
+		panic(err)
+	}
+	if !reflect.DeepEqual(pu, arr[0]) {
+		t.Errorf("%v!=%v", pu, arr[0])
+	}
+}
+
 func BenchmarkNativeCrud(b *testing.B) {
 	b.StopTimer()
 	dbmap := initDbMapBench()
