@@ -111,7 +111,7 @@ type DbMap struct {
 
 	TypeConverter TypeConverter
 
-	tables    []*TableMap
+	tables    *[]*TableMap
 	logger    *log.Logger
 	logPrefix string
 }
@@ -576,10 +576,12 @@ func (m *DbMap) AddTableWithName(i interface{}, name string) *TableMap {
 		name = t.Name()
 	}
 
+	m.autoNewTables()
+
 	// check if we have a table for this type already
 	// if so, update the name and return the existing pointer
-	for i := range m.tables {
-		table := m.tables[i]
+	for i := range *m.tables {
+		table := (*m.tables)[i]
 		if table.gotype == t {
 			table.TableName = name
 			return table
@@ -608,7 +610,8 @@ func (m *DbMap) AddTableWithName(i interface{}, name string) *TableMap {
 			tmap.version = tmap.columns[len(tmap.columns)-1]
 		}
 	}
-	m.tables = append(m.tables, tmap)
+	m.autoNewTables()
+	*m.tables = append(*m.tables, tmap)
 
 	return tmap
 }
@@ -620,8 +623,8 @@ func (m *DbMap) AddTableWithName(i interface{}, name string) *TableMap {
 // and destroy the schema automatically.
 func (m *DbMap) CreateTables() error {
 	var err error
-	for i := range m.tables {
-		table := m.tables[i]
+	for i := range *m.tables {
+		table := (*m.tables)[i]
 
 		s := bytes.Buffer{}
 		s.WriteString(fmt.Sprintf("create table %s (", m.Dialect.QuoteField(table.TableName)))
@@ -675,8 +678,8 @@ func (m *DbMap) CreateTables() error {
 // executes "drop table" statements against the database for each.
 func (m *DbMap) DropTables() error {
 	var err error
-	for i := range m.tables {
-		table := m.tables[i]
+	for i := range *m.tables {
+		table := (*m.tables)[i]
 		_, e := m.Exec(fmt.Sprintf("drop table %s;", m.Dialect.QuoteField(table.TableName)))
 		if e != nil {
 			err = e
@@ -822,8 +825,8 @@ func (m *DbMap) tableFor(t reflect.Type, checkPK bool) (*TableMap, error) {
 }
 
 func tableOrNil(m *DbMap, t reflect.Type) *TableMap {
-	for i := range m.tables {
-		table := m.tables[i]
+	for i := range *m.tables {
+		table := (*m.tables)[i]
 		if table.gotype == t {
 			return table
 		}
@@ -862,6 +865,16 @@ func (m *DbMap) trace(query string, args ...interface{}) {
 	if m.logger != nil {
 		m.logger.Printf("%s%s %v", m.logPrefix, query, args)
 	}
+}
+
+func (m *DbMap) autoNewTables() {
+	if m.tables == nil {
+		m.tables = new([]*TableMap) //自动new
+	}
+}
+
+func (m *DbMap) SetTables(tab *[]*TableMap) {
+	m.tables = tab
 }
 
 ///////////////
